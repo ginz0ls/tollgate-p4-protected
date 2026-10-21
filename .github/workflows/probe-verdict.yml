@@ -1,0 +1,83 @@
+name: probe-verdict
+# V1 (commento scritto con GITHUB_TOKEN), V3 (campi di workflow_run), V4 (salvataggio della cache), V6, V8 (download-artifact)
+on:
+  workflow_run:
+    workflows: [probe-run]
+    types: [completed]
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+  issues: write
+  pull-requests: write
+jobs:
+  verdict:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - id: tag
+        run: echo "tag=$(cat .github/probe-tag)" >> "$GITHUB_OUTPUT"
+      - id: d_dotdot_out
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: probe-run-dotdot-out
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/dl/dotdot-out
+      - id: d_dotdot_in
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: probe-run-dotdot-in
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/dl/dotdot-in
+      - id: d_symlink
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: probe-run-symlink
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/dl/symlink
+      - name: cache da salvare
+        run: |
+          mkdir -p "$RUNNER_TEMP/probe-cache"
+          jq '{head_sha: .workflow_run.head_sha, run_id: .workflow_run.id}' "$GITHUB_EVENT_PATH" > "$RUNNER_TEMP/probe-cache/value.json"
+      - id: cache_save
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/probe-cache
+          key: probe-v4-${{ steps.tag.outputs.tag }}
+      - name: campi dell'evento, commento e stato
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUT_DOTDOT_OUT: ${{ steps.d_dotdot_out.outcome }}
+          OUT_DOTDOT_IN: ${{ steps.d_dotdot_in.outcome }}
+          OUT_SYMLINK: ${{ steps.d_symlink.outcome }}
+          OUT_CACHE_SAVE: ${{ steps.cache_save.outcome }}
+        run: |
+          set -u
+          out="$RUNNER_TEMP/probe"; mkdir -p "$out"
+          jq '{event_keys: keys, workflow_run_keys: (.workflow_run | keys), path: .workflow_run.path, event: .workflow_run.event, head_sha: .workflow_run.head_sha, head_branch: .workflow_run.head_branch, conclusion: .workflow_run.conclusion, run_id: .workflow_run.id, pull_requests: [.workflow_run.pull_requests[] | {number: .number, base_ref: .base.ref, base_sha: .base.sha, head_ref: .head.ref, head_sha: .head.sha, keys: keys}]}' "$GITHUB_EVENT_PATH" > "$out/event-keys.json"
+          n="$(jq -r '.workflow_run.pull_requests[0].number // empty' "$GITHUB_EVENT_PATH")"
+          sha="$(jq -r .workflow_run.head_sha "$GITHUB_EVENT_PATH")"
+          comment_rc=none; comment_user=""
+          if [ -n "$n" ]; then
+            comment_rc=0
+            comment_user="$(gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$n/comments" -f body='commento scritto dal workflow probe-verdict (sonda V1)' --jq '[.user.login, .user.type, (.user.id | tostring)] | @tsv' 2> "$out/comment.err")" || comment_rc=$?
+          fi
+          status_rc=0
+          status_creator="$(gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state=success -f context=probe/verdict -f description=sonda --jq .creator.login 2> "$out/status.err")" || status_rc=$?
+          find "$RUNNER_TEMP" -maxdepth 6 -path "$RUNNER_TEMP/_*" -prune -o -printf '%y %p -> %l\n' > "$out/listing.txt"
+          jq -n --arg n "$n" --arg comment_rc "$comment_rc" --arg comment_user "$comment_user" --arg status_rc "$status_rc" --arg status_creator "$status_creator" --arg dotdot_out "$OUT_DOTDOT_OUT" --arg dotdot_in "$OUT_DOTDOT_IN" --arg symlink "$OUT_SYMLINK" --arg cache_save "$OUT_CACHE_SAVE" '{pr_number: $n, comment_rc: $comment_rc, comment_user_type_id: $comment_user, status_rc: ($status_rc|tonumber), status_creator: $status_creator, download_dotdot_out: $dotdot_out, download_dotdot_in: $dotdot_in, download_symlink: $symlink, cache_save: $cache_save}' > "$out/info.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: probe-verdict-info
+          path: ${{ runner.temp }}/probe

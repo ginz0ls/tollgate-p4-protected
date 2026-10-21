@@ -1,0 +1,73 @@
+name: probe-run
+# V4 (ripristino della cache in un job pull_request), V8 (upload-artifact con '..' e collegamenti simbolici)
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: tag
+        run: echo "tag=$(cat .github/probe-tag)" >> "$GITHUB_OUTPUT"
+      - id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/probe-cache
+          key: probe-v4-${{ steps.tag.outputs.tag }}
+      - name: file per gli artefatti
+        run: |
+          set -u
+          out="$RUNNER_TEMP/probe"; mkdir -p "$out"
+          jq '{event_keys: keys, pull_request_keys: (.pull_request | keys), number: .number, action: .action, head_sha: .pull_request.head.sha, head_ref: .pull_request.head.ref, base_ref: .pull_request.base.ref}' "$GITHUB_EVENT_PATH" > "$out/event-keys.json"
+          jq '{head_sha: .pull_request.head.sha, number: .number}' "$GITHUB_EVENT_PATH" > "$RUNNER_TEMP/main.json"
+          echo fuori > "$GITHUB_WORKSPACE/../probe-outside.txt"
+          mkdir -p "$GITHUB_WORKSPACE/sub"
+          echo dentro > "$GITHUB_WORKSPACE/keep.txt"
+          mkdir -p "$RUNNER_TEMP/up-sym"
+          echo reale > "$RUNNER_TEMP/up-sym/real.txt"
+          ln -s /etc/hostname "$RUNNER_TEMP/up-sym/link-assoluto"
+          ln -s real.txt "$RUNNER_TEMP/up-sym/link-relativo"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: probe-run-main
+          path: ${{ runner.temp }}/main.json
+      - id: u_dotdot_out
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-run-dotdot-out
+          path: ../probe-outside.txt
+          if-no-files-found: error
+      - id: u_dotdot_in
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-run-dotdot-in
+          path: sub/../keep.txt
+          if-no-files-found: error
+      - id: u_symlink
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-run-symlink
+          path: ${{ runner.temp }}/up-sym
+          if-no-files-found: error
+      - name: esiti
+        if: always()
+        env:
+          CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+          CACHE_KEY: ${{ steps.cache.outputs.cache-matched-key }}
+          OUT_DOTDOT_OUT: ${{ steps.u_dotdot_out.outcome }}
+          OUT_DOTDOT_IN: ${{ steps.u_dotdot_in.outcome }}
+          OUT_SYMLINK: ${{ steps.u_symlink.outcome }}
+        run: |
+          out="$RUNNER_TEMP/probe"; mkdir -p "$out"
+          jq -n --arg cache_hit "$CACHE_HIT" --arg cache_key "$CACHE_KEY" --arg dotdot_out "$OUT_DOTDOT_OUT" --arg dotdot_in "$OUT_DOTDOT_IN" --arg symlink "$OUT_SYMLINK" '{cache_hit: $cache_hit, cache_matched_key: $cache_key, upload_dotdot_out: $dotdot_out, upload_dotdot_in: $dotdot_in, upload_symlink: $symlink}' > "$out/info.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: probe-run-info
+          path: ${{ runner.temp }}/probe
