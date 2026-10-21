@@ -20,6 +20,14 @@ jobs:
           persist-credentials: false
       - id: tag
         run: echo "tag=$(cat .github/probe-tag)" >> "$GITHUB_OUTPUT"
+      - id: tag4b
+        run: echo "tag=$(cat .github/probe-v4b-tag 2>/dev/null || echo none)" >> "$GITHUB_OUTPUT"
+      - id: r4b
+        if: steps.tag4b.outputs.tag != 'none'
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/probe-cache-v4b
+          key: probe-v4b-${{ steps.tag4b.outputs.tag }}
       - id: d_dotdot_out
         continue-on-error: true
         uses: actions/download-artifact@v4
@@ -76,6 +84,17 @@ jobs:
           status_creator="$(gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state=success -f context=probe/verdict -f description=sonda --jq .creator.login 2> "$out/status.err")" || status_rc=$?
           find "$RUNNER_TEMP" -maxdepth 6 -path "$RUNNER_TEMP/_*" -prune -o -printf '%y %p -> %l\n' > "$out/listing.txt"
           jq -n --arg n "$n" --arg comment_rc "$comment_rc" --arg comment_user "$comment_user" --arg status_rc "$status_rc" --arg status_creator "$status_creator" --arg dotdot_out "$OUT_DOTDOT_OUT" --arg dotdot_in "$OUT_DOTDOT_IN" --arg symlink "$OUT_SYMLINK" --arg cache_save "$OUT_CACHE_SAVE" '{pr_number: $n, comment_rc: $comment_rc, comment_user_type_id: $comment_user, status_rc: ($status_rc|tonumber), status_creator: $status_creator, download_dotdot_out: $dotdot_out, download_dotdot_in: $dotdot_in, download_symlink: $symlink, cache_save: $cache_save}' > "$out/info.json"
+      - name: esiti v4b
+        if: always()
+        env:
+          V4B_HIT: ${{ steps.r4b.outputs.cache-hit }}
+          V4B_KEY: ${{ steps.r4b.outputs.cache-matched-key }}
+          V4B_TAG: ${{ steps.tag4b.outputs.tag }}
+        run: |
+          out="$RUNNER_TEMP/probe"; mkdir -p "$out"
+          value="$(cat "$RUNNER_TEMP/probe-cache-v4b/value.txt" 2>/dev/null || echo none)"
+          base='{}'; [ -f "$out/info.json" ] && base="$(cat "$out/info.json")"
+          printf '%s' "$base" | jq --arg hit "$V4B_HIT" --arg key "$V4B_KEY" --arg tag "$V4B_TAG" --arg value "$value" '. + {v4b_tag: $tag, v4b_cache_hit: $hit, v4b_matched_key: $key, v4b_value: $value}' > "$out/info.tmp" && mv "$out/info.tmp" "$out/info.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

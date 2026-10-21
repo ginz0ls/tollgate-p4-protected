@@ -12,6 +12,14 @@ jobs:
           persist-credentials: false
       - id: tag
         run: echo "tag=$(cat .github/probe-tag)" >> "$GITHUB_OUTPUT"
+      - id: tag4b
+        run: echo "tag=$(cat .github/probe-v4b-tag 2>/dev/null || echo none)" >> "$GITHUB_OUTPUT"
+      - id: r4b
+        if: steps.tag4b.outputs.tag != 'none'
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/probe-cache-v4b
+          key: probe-v4b-${{ steps.tag4b.outputs.tag }}
       - id: cache
         uses: actions/cache/restore@v4
         with:
@@ -66,6 +74,17 @@ jobs:
         run: |
           out="$RUNNER_TEMP/probe"; mkdir -p "$out"
           jq -n --arg cache_hit "$CACHE_HIT" --arg cache_key "$CACHE_KEY" --arg dotdot_out "$OUT_DOTDOT_OUT" --arg dotdot_in "$OUT_DOTDOT_IN" --arg symlink "$OUT_SYMLINK" '{cache_hit: $cache_hit, cache_matched_key: $cache_key, upload_dotdot_out: $dotdot_out, upload_dotdot_in: $dotdot_in, upload_symlink: $symlink}' > "$out/info.json"
+      - name: esiti v4b
+        if: always()
+        env:
+          V4B_HIT: ${{ steps.r4b.outputs.cache-hit }}
+          V4B_KEY: ${{ steps.r4b.outputs.cache-matched-key }}
+          V4B_TAG: ${{ steps.tag4b.outputs.tag }}
+        run: |
+          out="$RUNNER_TEMP/probe"; mkdir -p "$out"
+          value="$(cat "$RUNNER_TEMP/probe-cache-v4b/value.txt" 2>/dev/null || echo none)"
+          base='{}'; [ -f "$out/info.json" ] && base="$(cat "$out/info.json")"
+          printf '%s' "$base" | jq --arg hit "$V4B_HIT" --arg key "$V4B_KEY" --arg tag "$V4B_TAG" --arg value "$value" '. + {v4b_tag: $tag, v4b_cache_hit: $hit, v4b_matched_key: $key, v4b_value: $value}' > "$out/info.tmp" && mv "$out/info.tmp" "$out/info.json"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
