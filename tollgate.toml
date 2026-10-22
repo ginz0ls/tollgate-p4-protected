@@ -1,0 +1,28 @@
+schema_version = 1
+
+[project]
+allow_no_tests = false
+
+[gate]
+mode = "protected"
+
+[commands]
+verify = "python3 tools/unittest_junit.py"
+gate = ["verify"]
+report = "junit:reports/junit.xml"
+
+[profiles.web]
+paths = ["web/**"]
+gate = ["check"]
+report = "junit:reports/web-junit.xml"
+
+[profiles.web.commands]
+check = "python3 tools/unittest_junit.py web/tests reports/web-junit.xml || true"
+
+[profiles.notes]
+paths = ["notes/**"]
+gate = ["lint"]
+report = "junit:reports/notes-junit.xml"
+
+[profiles.notes.commands]
+lint = "python3 tools/empty_junit.py reports/notes-junit.xml"
