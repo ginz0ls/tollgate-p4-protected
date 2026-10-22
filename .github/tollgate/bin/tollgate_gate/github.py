@@ -134,8 +134,9 @@ def set_status(state, cwd, slug: str, sha: str, *, context: str, status: str,
         body = Path(tmp) / "status.json"
         body.write_text(json.dumps({"state": status, "context": context, "description": text}),
                         encoding="utf-8")
+        # idempotente: per SHA e contesto vale l'ultimo stato, ripubblicarlo non cambia l'esito
         ghcli.api(state, cwd, f"repos/{slug}/statuses/{_sha(sha)}", method="POST",
-                  input_file=body)
+                  input_file=body, retry=True)
 
 
 def statuses(state, cwd, slug: str, sha: str) -> list[dict]:
@@ -176,8 +177,9 @@ def upsert_comment(state, cwd, slug: str, n: int, *, prefix: str, body_file: Pat
         if login in ghcli.BOT_LOGINS and str(c.get("body", "")).lstrip().startswith(prefix):
             if not isinstance(c.get("id"), int):
                 raise ghcli.GhError("commento senza id")
+            # idempotente: riscrive lo stesso testo; il POST di un commento nuovo no (doppione)
             ghcli.api(state, cwd, f"repos/{slug}/issues/comments/{c['id']}", method="PATCH",
-                      file_fields={"body": body_file})
+                      file_fields={"body": body_file}, retry=True)
             return
     comment_issue(state, cwd, slug, n, body_file=body_file)
 

@@ -88,12 +88,14 @@ def _retry_delays(state) -> tuple[float, ...]:
     return tuple(float(x) for x in override.split(",")) if override else RETRY_DELAYS_S
 
 
-def _run_retrying(state, repo, args) -> subprocess.CompletedProcess:
-    """`run`; una lettura di `gh api` (senza `--method`, `-X`, campi né `--input`) ritenta sugli
-    errori transitori del server, con le attese di `RETRY_DELAYS_S`. Il resto (`pr create`, POST, PATCH...) non è
-    idempotente e non si ritenta; nemmeno il timeout. Dopo l'ultimo tentativo `r` è l'ultima
-    risposta, che il chiamante tratta come sempre."""
-    read = args[:1] == ["api"] and not any(a.startswith(_WRITE_FLAGS) for a in args)
+def _run_retrying(state, repo, args, *, idempotent: bool = False) -> subprocess.CompletedProcess:
+    """`run`; una lettura di `gh api` (senza `--method`, `-X`, campi né `--input`), o una scrittura
+    che il chiamante dichiara `idempotent`, ritenta sugli errori transitori del server, con le
+    attese di `RETRY_DELAYS_S`. Il resto (`pr create`, POST, PATCH...) non è idempotente e non si
+    ritenta; nemmeno il timeout. Dopo l'ultimo tentativo `r` è l'ultima risposta, che il chiamante
+    tratta come sempre."""
+    read = idempotent or (args[:1] == ["api"] and not any(a.startswith(_WRITE_FLAGS)
+                                                          for a in args))
     include = "--include" in args
     for delay in (*_retry_delays(state), None):
         r = run(state, repo, args)
@@ -160,13 +162,14 @@ def _split_include(stdout: str) -> tuple[int, str] | None:
 
 def api(state, cwd, path: str, *, method: str = "GET", fields: dict[str, str] | None = None,
         file_fields: dict[str, object] | None = None, input_file=None, include: bool = False,
-        paginate: bool = False, jq: str | None = None) -> ApiResult:
+        paginate: bool = False, jq: str | None = None, retry: bool = False) -> ApiResult:
     """`gh api`. Con `include=True` il codice HTTP si legge dalla riga di stato e un 403 o 404 è un
     risultato (`status`, `data` col corpo JSON se c'è), non un errore; senza, l'uscita non zero è
     un `GhError`. `file_fields` passa il contenuto di un file come campo (`-F chiave=@file`): il
     testo non fidato non entra mai negli argomenti. `paginate` vuole `jq` (G5: gli array delle
     pagine non si concatenano) e `data` è la lista dei valori che il filtro stampa, uno per riga.
-    Una GET ritenta sui 5xx transitori (`_run_retrying`)."""
+    Una GET ritenta sui 5xx transitori (`_run_retrying`); una scrittura solo con `retry=True`, che
+    il chiamante dichiara quando ripeterla non cambia l'esito."""
     if paginate and jq is None:
         raise ValueError("api --paginate richiede jq")
     if paginate and include:
@@ -187,7 +190,7 @@ def api(state, cwd, path: str, *, method: str = "GET", fields: dict[str, str] | 
     if input_file is not None:
         args += ["--input", str(input_file)]
     args.append(path)
-    r = _run_retrying(state, cwd, args)
+    r = _run_retrying(state, cwd, args, idempotent=retry)
     status, text = None, r.stdout
     if include:
         split = _split_include(r.stdout)
