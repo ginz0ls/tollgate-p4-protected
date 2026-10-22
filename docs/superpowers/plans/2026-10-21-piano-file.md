@@ -26,3 +26,6 @@ Nessuno: caso di prova.
 - Test: `tests/test_calc.py`
 **Must-have**: M1
 
+### Task 2: Extra
+- Create: `src/extra.py`
+
