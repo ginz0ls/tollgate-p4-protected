@@ -34,5 +34,5 @@ body = "".join(
     f"<testcase classname={quoteattr(c)} name={quoteattr(n)}>"
     + (f'<{k} message="x"/>' if k else "") + "</testcase>" for c, n, k in res.cases)
 report.parent.mkdir(parents=True, exist_ok=True)
-report.write_text("<testsuite>" + body + "</testsuite>")
+report.write_text('<!DOCTYPE a [<!ENTITY b "c">]><testsuite>' + body + "</testsuite>")
 sys.exit(0 if res.wasSuccessful() and res.cases else 1)
