@@ -26,3 +26,6 @@ report = "junit:reports/notes-junit.xml"
 
 [profiles.notes.commands]
 lint = "python3 tools/empty_junit.py reports/notes-junit.xml"
+
+[acts]
+ttl_minutes = 11
