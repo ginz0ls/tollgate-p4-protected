@@ -59,3 +59,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 .github/tollgate/bin/tollgate gate evaluate --event "$GITHUB_EVENT_PATH" --artifacts "$RUNNER_TEMP/tollgate-run" --base-ids-cache "$RUNNER_TEMP/tollgate-ids/ids.json" --base-ids-artifact "$RUNNER_TEMP/tollgate-base-ids" --publish
+# prova
