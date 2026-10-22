@@ -1,0 +1,13 @@
+schema_version = 1
+issue = 84
+branch = "tg/84-deroga-test"
+
+[[waiver]]
+id = "w-84-1"
+type = "test"
+file = "tests/test_calc.py"
+tests = ["tests.test_calc.CalcTest::test_sottrai"]
+choice = "prova del gate"
+why = "caso di prova"
+cost = "nessuno"
+declared_by = "agent"
