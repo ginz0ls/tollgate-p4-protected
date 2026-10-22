@@ -1,0 +1,13 @@
+schema_version = 1
+issue = 82
+branch = "tg/82-workflow-ci"
+
+[[waiver]]
+id = "w-82-1"
+type = "ci"
+file = ".github/workflows/ci.yml"
+tests = []
+choice = "prova del gate"
+why = "caso di prova"
+cost = "nessuno"
+declared_by = "agent"
