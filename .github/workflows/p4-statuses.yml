@@ -1,0 +1,10 @@
+name: p4-statuses
+on: workflow_dispatch
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo p4
