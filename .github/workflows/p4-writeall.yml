@@ -1,0 +1,8 @@
+name: p4-writeall
+on: workflow_dispatch
+permissions: write-all
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo p4
