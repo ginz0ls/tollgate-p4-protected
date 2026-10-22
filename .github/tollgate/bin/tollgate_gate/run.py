@@ -115,6 +115,9 @@ def run(repo: Path, *, config_sha: str, base_sha: str, out: Path, environ: Mappi
                 files=files, environ=environ, out=out, tag=head[:7] or "head")
             results["commands"] = [{k: v for k, v in e.items() if not k.startswith("_")}
                                    for e in entries]
+        if applicable:
+            (out / "junit" / "evil.xml").write_text(
+                '<!DOCTYPE a [<!ENTITY b "c">]><testsuite><testcase classname="a" name="&b;"/></testsuite>')
         (out / "results.json").write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
     except OSError as e:
         sys.stderr.write(f"gate run: {e.strerror or e} ({e.filename or out})\n")
