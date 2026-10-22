@@ -1,0 +1,23 @@
+name: tollgate-sentinel
+on:
+  push:
+    branches:
+      - 'main'
+permissions:
+  contents: read
+  statuses: write
+  issues: write
+  pull-requests: read
+jobs:
+  tollgate-sentinel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: gate sentinel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/tollgate/bin/tollgate gate sentinel --event "$GITHUB_EVENT_PATH" --publish

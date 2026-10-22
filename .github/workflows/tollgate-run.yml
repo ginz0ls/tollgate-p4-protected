@@ -1,0 +1,77 @@
+name: tollgate-run
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+permissions:
+  contents: read
+concurrency:
+  group: tollgate-run-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  head:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: gate run
+        run: python3 .github/tollgate/bin/tollgate gate run --event "$GITHUB_EVENT_PATH" --out "$RUNNER_TEMP/tollgate-run"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tollgate-run
+          path: ${{ runner.temp }}/tollgate-run
+  base:
+    if: github.event.pull_request.base.ref == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: trusted
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          fetch-depth: 0
+          persist-credentials: false
+      - name: merge-base e albero
+        id: key
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -eu
+          mergebase=$(git -C head merge-base "origin/$DEFAULT_BRANCH" HEAD)
+          tree=$(git -C head rev-parse "$mergebase^{tree}")
+          echo "mergebase=$mergebase" >> "$GITHUB_OUTPUT"
+          echo "tree=$tree" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: cache
+        with:
+          key: tollgate-ids-${{ steps.key.outputs.tree }}
+          path: ${{ runner.temp }}/tollgate-ids
+      - uses: actions/checkout@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          ref: ${{ steps.key.outputs.mergebase }}
+          path: base
+          persist-credentials: false
+      - name: gate base-ids
+        if: steps.cache.outputs.cache-hit != 'true'
+        working-directory: trusted
+        env:
+          MERGE_BASE: ${{ steps.key.outputs.mergebase }}
+        run: python3 .github/tollgate/bin/tollgate gate base-ids --sha "$MERGE_BASE" --root "$GITHUB_WORKSPACE/base" --event "$GITHUB_EVENT_PATH" --out "$RUNNER_TEMP/tollgate-base-ids"
+      - uses: actions/upload-artifact@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          name: tollgate-base-ids
+          path: ${{ runner.temp }}/tollgate-base-ids

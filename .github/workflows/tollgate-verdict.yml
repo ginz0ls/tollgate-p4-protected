@@ -1,0 +1,61 @@
+name: tollgate-verdict
+on:
+  workflow_run:
+    workflows:
+      - tollgate-run
+    types:
+      - completed
+permissions:
+  contents: read
+  statuses: write
+  pull-requests: write
+  actions: read
+  issues: read
+jobs:
+  tollgate-verdict:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: tollgate-run
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/tollgate-run
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: tollgate-base-ids
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/tollgate-base-ids
+      - name: albero di merge-base
+        id: key
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -eu
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
+          git fetch --no-tags origin "$HEAD_SHA"
+          mergebase=$(git merge-base "origin/$DEFAULT_BRANCH" "$HEAD_SHA")
+          echo "tree=$(git rev-parse "$mergebase^{tree}")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        if: steps.key.outputs.tree != ''
+        with:
+          key: tollgate-ids-${{ steps.key.outputs.tree }}
+          path: ${{ runner.temp }}/tollgate-ids
+      - name: gate evaluate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/tollgate/bin/tollgate gate evaluate --event "$GITHUB_EVENT_PATH" --artifacts "$RUNNER_TEMP/tollgate-run" --base-ids-cache "$RUNNER_TEMP/tollgate-ids/ids.json" --base-ids-artifact "$RUNNER_TEMP/tollgate-base-ids" --publish

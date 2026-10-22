@@ -1,0 +1,69 @@
+name: tollgate-base
+on:
+  push:
+    branches:
+      - 'main'
+permissions:
+  contents: read
+  statuses: write
+  issues: write
+# Il job `ids` esegue la suite del progetto: sola lettura e nessun token. Il job `tollgate-base`
+# pubblica gli stati e non esegue nulla del progetto. Dopo un push forzato che toglie $GITHUB_SHA
+# dal ramo, `ids` o la pubblicazione possono fallire senza stato `tollgate/base`: la copre
+# `tollgate-sentinel`.
+jobs:
+  ids:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - name: albero del commit
+        id: key
+        run: echo "tree=$(git rev-parse "$GITHUB_SHA^{tree}")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: cache
+        with:
+          key: tollgate-ids-${{ steps.key.outputs.tree }}
+          path: ${{ runner.temp }}/tollgate-ids
+      - name: gate base-ids
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: python3 .github/tollgate/bin/tollgate gate base-ids --sha "$GITHUB_SHA" --event "$GITHUB_EVENT_PATH" --out "$RUNNER_TEMP/tollgate-ids"
+      - uses: actions/cache/save@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          key: tollgate-ids-${{ steps.key.outputs.tree }}
+          path: ${{ runner.temp }}/tollgate-ids
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tollgate-ids
+          path: ${{ runner.temp }}/tollgate-ids/ids.json
+          if-no-files-found: ignore
+  tollgate-base:
+    needs: ids
+    if: always()
+    permissions:
+      contents: read
+      statuses: write
+      issues: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: tollgate-ids
+          path: ${{ runner.temp }}/tollgate-ids
+      - name: gate base-publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/tollgate/bin/tollgate gate base-publish --ids "$RUNNER_TEMP/tollgate-ids" --event "$GITHUB_EVENT_PATH" --publish
