@@ -10,7 +10,7 @@ from typing import Mapping
 
 STATE_ENV = "TOLLGATE_STATE"
 SENTINEL = ".tollgate-test"
-TEST_ENVS = ("TOLLGATE_STATE", "TOLLGATE_GH", "TOLLGATE_TEST_CONFIG")
+TEST_ENVS = ("TOLLGATE_STATE", "TOLLGATE_GH", "TOLLGATE_TEST_CONFIG", "TOLLGATE_GH_RETRY_DELAYS")
 
 
 def program_command(bin_path) -> str:

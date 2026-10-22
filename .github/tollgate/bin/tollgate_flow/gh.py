@@ -105,7 +105,10 @@ def pr_create(state, repo, *, branch: str, base: str, title: str, body_file) -> 
 
 
 def pr_edit(state, repo, number: int, *, body_file) -> None:
-    _run_checked(state, repo, ["pr", "edit", str(int(number)), "--body-file", str(body_file)])
+    """Aggiorna il corpo con la REST: `gh pr edit` con gh 2.46 esce con 1 per la deprecazione dei Projects (classic)
+    (`repository.pullRequest.projectCards`). `{owner}/{repo}` lo risolve gh; il testo viene dal file, mai da un argomento."""
+    _run_checked(state, repo, ["api", "--method", "PATCH", f"repos/{{owner}}/{{repo}}/pulls/{int(number)}",
+                               "-F", f"body=@{body_file}"])
 
 
 def pr_body(state, repo, number: int) -> str:
