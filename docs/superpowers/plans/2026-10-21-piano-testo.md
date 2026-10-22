@@ -19,7 +19,7 @@ I file del task 1.
 Nessuno: caso di prova.
 
 ## Rischi
-Nessuno: caso di prova.
+Riscritto dopo la registrazione.
 
 ### Task 1: piano-testo
 - Modify: `src/calc.py`
