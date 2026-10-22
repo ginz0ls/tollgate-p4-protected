@@ -1,0 +1,11 @@
+name: p4-ancora
+on: workflow_dispatch
+permissions:
+  contents: read
+env: &base
+  X: "1"
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo p4
