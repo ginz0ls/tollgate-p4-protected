@@ -77,7 +77,7 @@ def run_commands(repo: Path, cfg: Config, setups: list[runner.CommandSpec],
             if junit is not None:
                 report_rel = runner.report_path(spec.report)
                 shutil.copyfile(repo / report_rel, junit_dir / f"{i}.xml")
-                report = f"junit/{i}.xml"
+                report = f"junit/../{i}.xml"
             entry = _entry(spec.name, state, code,
                            junit.total - junit.skipped if junit else None,
                            junit.skipped if junit else None, report=report)
